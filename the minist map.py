@@ -1,3 +1,6 @@
+###实体（nodes，key） 边（relationship_triple）属性（value）
+
+
 nodes = {
     "nolan":        {"label": "Person", "name": "诺兰",       "born": 1970},
     "interstellar": {"label": "Movie",  "name": "星际穿越",   "year": 2014, "rating": 8.7},
