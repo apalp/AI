@@ -1,0 +1,135 @@
+
+<h2 class="sr-only">FOIL 信息增益交互计算器，可调节正反例数量实时查看增益变化</h2>
+<style>
+.fg-wrap { padding: 1rem 0; }
+.fg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem; }
+.fg-panel { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; }
+.fg-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 12px; }
+.slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.slider-row label { font-size: 13px; color: var(--color-text-secondary); width: 48px; flex-shrink: 0; }
+.slider-row input[type=range] { flex: 1; }
+.slider-row .val { font-size: 13px; font-weight: 500; color: var(--color-text-primary); min-width: 20px; text-align: right; }
+.fg-result { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem 1.5rem; }
+.fg-metric-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.fg-metric-row:last-child { border-bottom: none; }
+.fg-metric-label { font-size: 13px; color: var(--color-text-secondary); font-family: var(--font-mono); }
+.fg-metric-val { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+.gain-display { margin-top: 1.25rem; text-align: center; padding: 1rem; border-radius: var(--border-radius-md); transition: background 0.3s; }
+.gain-num { font-size: 32px; font-weight: 500; }
+.gain-label { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+.bar-wrap { height: 6px; background: var(--color-border-tertiary); border-radius: 3px; margin: 1rem 0 0; overflow: hidden; }
+.bar-fill { height: 6px; border-radius: 3px; background: #534AB7; transition: width 0.3s; }
+.formula-box { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 14px; font-size: 13px; font-family: var(--font-mono); color: var(--color-text-secondary); margin-bottom: 1.25rem; line-height: 1.9; }
+</style>
+
+<div class="fg-wrap">
+  <div class="formula-box" id="formula-display">
+    FOIL_Gain = p' × ( log₂(p'/(p'+n')) − log₂(p/(p+n)) )
+  </div>
+
+  <div class="fg-row">
+    <div class="fg-panel">
+      <div class="fg-title">加条件前（初始集合）</div>
+      <div class="slider-row">
+        <label>正例 p</label>
+        <input type="range" min="1" max="10" value="2" step="1" id="p" oninput="update()">
+        <span class="val" id="p-v">2</span>
+      </div>
+      <div class="slider-row">
+        <label>反例 n</label>
+        <input type="range" min="0" max="10" value="2" step="1" id="n" oninput="update()">
+        <span class="val" id="n-v">2</span>
+      </div>
+    </div>
+    <div class="fg-panel">
+      <div class="fg-title">加条件后（筛选后集合）</div>
+      <div class="slider-row">
+        <label>正例 p'</label>
+        <input type="range" min="0" max="10" value="1" step="1" id="pp" oninput="update()">
+        <span class="val" id="pp-v">1</span>
+      </div>
+      <div class="slider-row">
+        <label>反例 n'</label>
+        <input type="range" min="0" max="10" value="0" step="1" id="np" oninput="update()">
+        <span class="val" id="np-v">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fg-result">
+    <div class="fg-metric-row">
+      <span class="fg-metric-label">加条件前纯度  t = p/(p+n)</span>
+      <span class="fg-metric-val" id="t-before">—</span>
+    </div>
+    <div class="fg-metric-row">
+      <span class="fg-metric-label">加条件后纯度  t' = p'/(p'+n')</span>
+      <span class="fg-metric-val" id="t-after">—</span>
+    </div>
+    <div class="fg-metric-row">
+      <span class="fg-metric-label">前信息量  −log₂(t)</span>
+      <span class="fg-metric-val" id="info-before">—</span>
+    </div>
+    <div class="fg-metric-row">
+      <span class="fg-metric-label">后信息量  −log₂(t')</span>
+      <span class="fg-metric-val" id="info-after">—</span>
+    </div>
+    <div class="gain-display" id="gain-display">
+      <div class="gain-num" id="gain-num">—</div>
+      <div class="gain-label">FOIL Gain（单位：bits × 正例数）</div>
+      <div class="bar-wrap"><div class="bar-fill" id="gain-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function log2safe(x) { return x <= 0 ? -Infinity : Math.log2(x); }
+
+function update() {
+  const p  = parseInt(document.getElementById('p').value);
+  const n  = parseInt(document.getElementById('n').value);
+  const pp = parseInt(document.getElementById('pp').value);
+  const np = parseInt(document.getElementById('np').value);
+
+  document.getElementById('p-v').textContent  = p;
+  document.getElementById('n-v').textContent  = n;
+  document.getElementById('pp-v').textContent = pp;
+  document.getElementById('np-v').textContent = np;
+
+  const t  = p / (p + n);
+  const tp = (pp + np) === 0 ? 0 : pp / (pp + np);
+
+  const ib = -log2safe(t);
+  const ia = -log2safe(tp);
+
+  document.getElementById('t-before').textContent  = t.toFixed(2);
+  document.getElementById('t-after').textContent   = (pp + np === 0) ? 'N/A' : tp.toFixed(2);
+  document.getElementById('info-before').textContent = isFinite(ib) ? ib.toFixed(3) + ' bit' : '∞';
+  document.getElementById('info-after').textContent  = isFinite(ia) ? ia.toFixed(3) + ' bit' : (pp===0?'N/A':'0.000 bit');
+
+  let gain = 0;
+  let gainStr = '0.000';
+  let bgColor = 'var(--color-background-secondary)';
+
+  if (pp > 0 && (pp + np) > 0) {
+    gain = pp * (log2safe(tp) - log2safe(t));
+    gainStr = gain.toFixed(3);
+    if (gain > 0) bgColor = 'var(--color-background-success)';
+    else if (gain < 0) bgColor = 'var(--color-background-danger)';
+  } else if (pp === 0) {
+    gainStr = 'N/A（无正例覆盖）';
+  }
+
+  document.getElementById('gain-num').textContent = gainStr;
+  document.getElementById('gain-display').style.background = bgColor;
+
+  const maxGain = 20;
+  const pct = Math.max(0, Math.min(100, gain / maxGain * 100));
+  document.getElementById('gain-bar').style.width = pct.toFixed(1) + '%';
+
+  document.getElementById('formula-display').textContent =
+    `FOIL_Gain = ${pp} × ( log₂(${pp === 0 ? 0 : tp.toFixed(2)}) − log₂(${t.toFixed(2)}) )`
+    + (pp > 0 && isFinite(gain) ? `\n           = ${pp} × ( ${log2safe(tp).toFixed(3)} − ${log2safe(t).toFixed(3)} )\n           = ${gain.toFixed(3)} bits` : '');
+}
+
+update();
+</script>
